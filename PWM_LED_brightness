@@ -1,0 +1,43 @@
+//PWM control brightness
+#include <regx52.h>
+#include <Pin_Definition_H.h>
+
+void Timer0_Init(void) {   
+		TMOD &= 0xF0;  // Clear Timer0 control bits (keep Timer1 settings)
+    TMOD |= 0x01;  // Set Timer0 to Mode 1 (16-bit timer mode)
+
+    // Calculation for 1ms delay:
+    // Timer counts = 12MHz / 12 = 1,000,000 counts/sec
+    // 1ms = 1000 counts => 65536 - 1000 = 64536 = 0xFC66
+    TH0 = 0xFC;    // Load high byte
+    TL0 = 0x66;    // Load low byte
+
+    ET0 = 1;       // Enable Timer0 interrupt
+    EA = 1;        // Enable global interrupts
+    TR0 = 1;       // Start Timer0
+}
+void main(){
+	
+	Timer0_Init();
+	TR0=1;
+	 while(1) 
+	{
+      // Main loop does nothing, work is done in the ISR
+  };
+}
+
+
+void Timer0_ISR(void) interrupt 1 {
+	static int count;
+  unsigned int nLED  ;
+	TH0 = 0xFC;    // Reload high byte
+  TL0 = 0x66;    // Reload low byte
+		
+  count++;
+	nLED=(unsigned int)DSW;
+	
+  if(count <=nLED) LEDS=0;
+	else LEDS=0xFF;
+	if(count>0x0A)count=0;
+}
+
