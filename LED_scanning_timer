@@ -1,0 +1,139 @@
+#include <regx52.h>
+#include "Pin_Definition_H.h"
+#include "delay_x1ms_H.h"
+#define PHASE_NO 4
+
+// Function prototypes
+void Timer1_Init();
+void LED_speed(unsigned int);
+
+// Variables
+char i = -1; // LED position index
+code unsigned char led_tab[] = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80};
+
+unsigned int count = 0;
+bit int0_flag = 0, int1_flag = 0;//button flag
+bit timer_running = 0; 
+bit intx_flag=0 ; 
+unsigned char step_count=0;
+
+// **Timer 1 - LED Control**
+void Timer1_Init() 
+{
+    TMOD |= 0x10;   // Set Timer 0 to Mode 1 (16-bit timer)
+    TH1 = 0xFC;     // Load initial value for 1ms timing
+    TL1 = 0x67;
+    TF1 = 0;        // Clear overflow flag
+    ET1 = 1;        // Enable Timer 0 interrupt
+    EA = 1;         // Enable global interrupts
+    TR1 = 0;        // Timer initially OFF
+}
+
+
+void main() 
+{
+   
+    Timer1_Init();  // Initialize Timer 1
+    IE |= 0x85;     // Enable external interrupts (EX0, EX1)
+
+    while (1) 
+    {
+       
+        // Start function (check if any interrupt flag is set)
+        intx_flag = int0_flag || int1_flag;
+        if (timer_running) 
+        {    
+            // Speed mode
+            if (JPB4) 
+							LED_speed(DSW);
+						
+            // Step mode
+            else 
+							LED_speed(300);
+ 
+        }
+				
+    }
+}
+
+//INT0 Interrupt (Start LED & Move Right)
+void int0_isr() interrupt 0 
+{
+    if (int1_flag) return;  // Skip execution if INT1 is active
+
+    if (JPB4) //if JPB4 unpressed//speed mode
+		{
+			int0_flag = ~int0_flag;
+			count=0;
+			if(int0_flag==1)  TR1 = 1;   // Start Timer0
+			else  // pause Timer0
+			{	
+				TR1 = 0;   
+				timer_running=0;
+			}	
+		}
+    else  //navigation mode
+        int0_flag = 1; 
+
+    delay_x1ms(300); // Debounce delay
+   
+}
+
+// INT1 Interrupt (Start LED & Move Left)
+void int1_isr() interrupt 2	
+{
+    if (int0_flag) return;  // Skip execution if INT0 is active
+
+    if (JPB4) //if JPB4 unpressed//speed mode
+		{
+			int1_flag = ~int1_flag; 
+			count=0;
+			if(int1_flag==1)  TR1 = 1;   // Start Timer0
+			else
+			{	
+				TR1 = 0;   // pause Timer0
+				timer_running=0;
+			}	
+		}
+    else  //navigation mode
+        int1_flag = 1;
+		
+    delay_x1ms(300); // Debounce delay
+}
+
+// LED Speed Control Function
+void LED_speed(unsigned int ms)
+{
+    unsigned int nCnt;  
+    count++;  
+		nCnt = (unsigned int)300 * ms + 10;   
+
+    if (count >= nCnt)  
+			{  
+					count = 0;  
+					
+
+					if (int0_flag)  
+						{  
+							i++;  
+							if (i >= PHASE_NO) i = 0; 
+						}  
+
+					else if (int1_flag)  
+						{  
+							i--;  
+							if (i<0) i = PHASE_NO-1;
+						}
+					LEDS = ~led_tab[i];  
+			}     
+}  
+// **Timer 0 Interrupt - Controls LED Speed**
+void Timer1_ISR() interrupt 3
+{
+    TH0 = 0xFC;  // Reload for 1ms timing
+    TL0 = 0x67;
+    TF0 = 0;     // Clear overflow flag
+
+    timer_running = 1;
+	
+}
